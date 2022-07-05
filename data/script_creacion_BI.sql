@@ -222,17 +222,11 @@ CREATE TABLE CEBOLLITA_SUB_CAMPEON.BI_Medicion (
 	velocidad decimal(18,2),
 	combustible decimal(18,2),
 	tiempo_vuelta decimal(18,10),
-	num_vuelta decimal(18,0),
+	num_vuelta int,
 	Potencia_motor decimal(18,6),
 	Desgaste_caja decimal(18,2),
-	Grosor_freno1 decimal(18,0),
-	Grosor_freno2 decimal(18,0),
-	Grosor_freno3 decimal(18,0),
-	Grosor_freno4 decimal(18,0),
-	profundidad_neu1 decimal(18,6),
-	profundidad_neu2 decimal(18,6),
-	profundidad_neu3 decimal(18,6),
-	profundidad_neu4 decimal(18,6),
+	desgaste_frenos decimal(18,0),
+	desgaste_neumaticos decimal(18,6),
 	PRIMARY KEY(codigo_medicion,dim_auto_modelo,dim_auto_nro,dim_tipo_sector,dim_escuderia,dim_anio,dim_cuatri,dim_piloto_nombre,dim_piloto_apellido),
 	foreign key(dim_anio,dim_cuatri) references CEBOLLITA_SUB_CAMPEON.BI_Tiempo(año, cuatrimestre),
 	foreign key(dim_auto_modelo,dim_auto_nro) references CEBOLLITA_SUB_CAMPEON.BI_Auto(auto_modelo,auto_numero),
@@ -240,6 +234,65 @@ CREATE TABLE CEBOLLITA_SUB_CAMPEON.BI_Medicion (
 ) on [PRIMARY]
 go
 
+CREATE FUNCTION CEBOLLITA_SUB_CAMPEON.desgaste_neumaticos(@vuelta int, @carrera int, @automodelo nvarchar(255), @autonumero int)
+returns  decimal(18,6)
+as
+begin
+	return ((select top 1 sum(n.neumatico_profundidad) from CEBOLLITA_SUB_CAMPEON.Medicion m 
+			join CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico n on m.codigo_medicion=n.id_medicion 
+			where m.med_nro_vuelta=@vuelta and m.id_carrera=@carrera and m.auto_modelo=@automodelo and m.auto_numero=@autonumero
+			group by m.med_tiempo_vuelta
+			order by m.med_tiempo_vuelta asc)-(select top 1 sum(n.neumatico_profundidad) from CEBOLLITA_SUB_CAMPEON.Medicion m 
+			join CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico n on m.codigo_medicion=n.id_medicion 
+			where m.med_nro_vuelta=@vuelta and m.id_carrera=@carrera and m.auto_modelo=@automodelo and m.auto_numero=@autonumero
+			group by m.med_tiempo_vuelta
+			order by m.med_tiempo_vuelta desc))/4
+end
+go
+
+
+
+CREATE FUNCTION CEBOLLITA_SUB_CAMPEON.desgaste_frenos(@vuelta int, @carrera int, @automodelo nvarchar(255), @autonumero int)
+returns  decimal(18,0)
+as
+begin
+	return ((select top 1 sum(f.freno_grosor_pastilla) from CEBOLLITA_SUB_CAMPEON.Medicion m 
+			join CEBOLLITA_SUB_CAMPEON.Medicion_Freno f on m.codigo_medicion=f.id_medicion 
+			where m.med_nro_vuelta=@vuelta and m.id_carrera=@carrera and m.auto_modelo=@automodelo and m.auto_numero=@autonumero
+			group by m.med_tiempo_vuelta 
+			order by m.med_tiempo_vuelta asc)-(select top 1 sum(f.freno_grosor_pastilla) from CEBOLLITA_SUB_CAMPEON.Medicion m 
+			join CEBOLLITA_SUB_CAMPEON.Medicion_Freno f on m.codigo_medicion=f.id_medicion 
+			where m.med_nro_vuelta=@vuelta and m.id_carrera=@carrera and m.auto_modelo=@automodelo and m.auto_numero=@autonumero
+			group by m.med_tiempo_vuelta 
+			order by m.med_tiempo_vuelta desc))/4
+end
+go
+
+CREATE FUNCTION CEBOLLITA_SUB_CAMPEON.tiempo_vuelta_por_auto_y_vuelta(@vuelta int, @carrera int, @automodelo nvarchar(255), @autonumero int)
+returns decimal(18,10)
+as
+begin
+	return (SELECT max(med_tiempo_vuelta)
+		FROM CEBOLLITA_SUB_CAMPEON.Medicion
+		WHERE med_nro_vuelta = @vuelta AND id_carrera = @carrera AND auto_numero= @autonumero and auto_modelo=@automodelo)
+end
+go
+
+CREATE FUNCTION CEBOLLITA_SUB_CAMPEON.desgaste_Motor(@vuelta int, @carrera int, @automodelo nvarchar(255), @autonumero int)
+returns decimal(18,6)
+as
+begin
+	return (select top 1 max(m.motor_potencia)
+			FROM CEBOLLITA_SUB_CAMPEON.Medicion 
+			join CEBOLLITA_SUB_CAMPEON.Medicion_Motor m on codigo_medicion=m.id_medicion
+			WHERE med_nro_vuelta = @vuelta AND id_carrera = @carrera AND auto_numero= @autonumero and auto_modelo=@automodelo)
+			-
+			(select top 1 min(m.motor_potencia)
+			FROM CEBOLLITA_SUB_CAMPEON.Medicion 
+			join CEBOLLITA_SUB_CAMPEON.Medicion_Motor m on codigo_medicion=m.id_medicion
+			WHERE med_nro_vuelta = @vuelta AND id_carrera = @carrera AND auto_numero= @autonumero and auto_modelo=@automodelo)
+end
+go
 
 create procedure CEBOLLITA_SUB_CAMPEON.Cargar_mediciones_BI
 as
@@ -261,14 +314,8 @@ insert into CEBOLLITA_SUB_CAMPEON.BI_Medicion(
 	dim_piloto_apellido,
 	Potencia_motor,
 	Desgaste_caja,
-	profundidad_neu1,
-	profundidad_neu2,
-	profundidad_neu3,
-	profundidad_neu4,
-	Grosor_freno1,
-	Grosor_freno2,
-	Grosor_freno3,
-	Grosor_freno4,
+	desgaste_frenos,
+	desgaste_neumaticos,
 	dim_tipo_neumatico
 )
 select 
@@ -276,7 +323,7 @@ m.codigo_medicion,
 m.med_combustible,
 m.med_nro_vuelta,
 m.med_velocidad,
-m.med_tiempo_vuelta,
+CEBOLLITA_SUB_CAMPEON.tiempo_vuelta_por_auto_y_vuelta(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 m.auto_modelo,
 m.auto_numero,
 m.id_carrera,
@@ -286,22 +333,15 @@ s.sector_tipo,
 a.escuderia,
 a.auto_piloto_nombre,
 a.auto_piloto_apellido,
-mm.motor_potencia,
+CEBOLLITA_SUB_CAMPEON.desgaste_Motor(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 mc.caja_desgaste,
-(select neumatico_profundidad from CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico mn inner join CEBOLLITA_SUB_CAMPEON.Neumatico neu_DD on neu_DD.neumatico_serie= mn.id_neumatico and neu_DD.neumatico_posicion='Delantero Derecho' WHERE mn.id_medicion= m.codigo_medicion),
-(select neumatico_profundidad from CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico mn inner join CEBOLLITA_SUB_CAMPEON.Neumatico neu_DI on neu_DI.neumatico_serie= mn.id_neumatico and neu_DI.neumatico_posicion='Delantero Izquierdo'WHERE mn.id_medicion= m.codigo_medicion),
-(select neumatico_profundidad from CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico mn 	inner join CEBOLLITA_SUB_CAMPEON.Neumatico neu_TD on neu_TD.neumatico_serie= mn.id_neumatico and neu_TD.neumatico_posicion='Trasero Derecho' WHERE mn.id_medicion= m.codigo_medicion),
-(select neumatico_profundidad from CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico mn 	inner join CEBOLLITA_SUB_CAMPEON.Neumatico neu_TI on neu_TI.neumatico_serie= mn.id_neumatico and neu_TI.neumatico_posicion='Trasero Izquierdo' WHERE mn.id_medicion= m.codigo_medicion),
-(select freno_grosor_pastilla from CEBOLLITA_SUB_CAMPEON.Medicion_Freno mn inner join CEBOLLITA_SUB_CAMPEON.Freno neu_DD on neu_DD.Freno_serie= mn.id_Freno and neu_DD.Freno_posicion='Delantero Derecho' WHERE mn.id_medicion= m.codigo_medicion),
-(select freno_grosor_pastilla from CEBOLLITA_SUB_CAMPEON.Medicion_Freno mn inner join CEBOLLITA_SUB_CAMPEON.Freno neu_DI on neu_DI.Freno_serie= mn.id_Freno and neu_DI.Freno_posicion='Delantero Izquierdo'WHERE mn.id_medicion= m.codigo_medicion),
-(select freno_grosor_pastilla from CEBOLLITA_SUB_CAMPEON.Medicion_Freno mn 	inner join CEBOLLITA_SUB_CAMPEON.Freno neu_TD on neu_TD.Freno_serie= mn.id_Freno and neu_TD.Freno_posicion='Trasero Derecho' WHERE mn.id_medicion= m.codigo_medicion),
-(select freno_grosor_pastilla from CEBOLLITA_SUB_CAMPEON.Medicion_Freno mn 	inner join CEBOLLITA_SUB_CAMPEON.Freno neu_TI on neu_TI.Freno_serie= mn.id_Freno and neu_TI.Freno_posicion='Trasero Izquierdo' WHERE mn.id_medicion= m.codigo_medicion),
+CEBOLLITA_SUB_CAMPEON.desgaste_frenos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
+CEBOLLITA_SUB_CAMPEON.desgaste_neumaticos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 (select neumatico_tipo from CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico mn inner join CEBOLLITA_SUB_CAMPEON.Neumatico neu_DD on neu_DD.neumatico_serie= mn.id_neumatico and neu_DD.neumatico_posicion='Delantero Derecho' WHERE mn.id_medicion= m.codigo_medicion)
 from CEBOLLITA_SUB_CAMPEON.Medicion m
 	join CEBOLLITA_SUB_CAMPEON.Carrera c on c.id_carrera=m.id_carrera
 	join CEBOLLITA_SUB_CAMPEON.Sector s on s.codigo_sector=m.codigo_sector
 	join CEBOLLITA_SUB_CAMPEON.[Auto] a on a.auto_modelo=m.auto_modelo and a.auto_numero=m.auto_numero
-	join CEBOLLITA_SUB_CAMPEON.Medicion_Motor mm on mm.id_medicion=m.codigo_medicion
 	join CEBOLLITA_SUB_CAMPEON.Medicion_Caja mc on mc.id_medicion=m.codigo_medicion
 commit
 go
@@ -427,68 +467,11 @@ GO
 --VIEW 1
 create view CEBOLLITA_SUB_CAMPEON.DesgastePromedioPorVueltaPorAutoPorCircuito
 as
-select ((select max(profundidad_neu1) from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo)
-		-
-		(select min(profundidad_neu1) from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo)) as gasto_neumatico_1,
-		(select top 1 profundidad_neu2 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)
-		-
-		(select top 1 profundidad_neu2 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc) as gasto_neumatico_2,
-		(select top 1 profundidad_neu3 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)
-		-
-		(select top 1 profundidad_neu3 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc) as gasto_neumatico_3,
-		((select top 1 profundidad_neu4 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)
-		-
-		(select top 1 profundidad_neu4 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc)) as gasto_neumatico_4,
-		((select top 1 Grosor_freno1 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc)
-		-
-		(select top 1 Grosor_freno1 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)) as desgaste_freno_1,
-		((select top 1 Grosor_freno2 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc)
-		-
-		(select top 1 Grosor_freno2 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)) as desgaste_freno_2,
-		((select top 1 Grosor_freno3 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc)
-		-
-		(select top 1 Grosor_freno3 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)) as gasto_freno_3,
-		((select top 1 Grosor_freno4 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 asc)
-		-
-		(select top 1 Grosor_freno4 from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by 1 desc)) as gasto_freno_4,
-
-		((select top 1 Potencia_motor from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by tiempo_vuelta asc) - 
-		(select top 1 Potencia_motor from CEBOLLITA_SUB_CAMPEON.BI_Medicion 
-		where dim_circuito=m.dim_circuito and num_vuelta=m.num_vuelta and dim_auto_nro=m.dim_auto_nro and dim_auto_modelo=m.dim_auto_modelo
-		order by tiempo_vuelta desc) ) as desgaste_motor,
-		avg(m.Desgaste_caja)as desgaste_caja,
+select 
+		avg(Potencia_motor) desgaste_motor,
+		avg(m.Desgaste_caja) desgaste_caja,---ver estoooooooo
+		avg(desgaste_frenos) desgaste_freno,
+		avg(desgaste_neumaticos) desgaste_neumaticos,
 		m.num_vuelta,
 		m.dim_circuito,
 		m.dim_auto_nro,
@@ -499,51 +482,13 @@ select ((select max(profundidad_neu1) from CEBOLLITA_SUB_CAMPEON.BI_Medicion
 
 
 --VIEW 2
-create function CEBOLLITA_SUB_CAMPEON.tiempoVuelta(@vuelta int, @circuito int, @autonumero int, @automodelo nvarchar(255),@año int)
-returns decimal(18,10)
-as 
-begin
-return (SELECT max(tiempo_vuelta)
-		FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion
-		WHERE dim_anio = @año AND num_vuelta = @vuelta AND dim_circuito = @circuito AND dim_auto_nro = @autonumero and dim_auto_modelo=@automodelo)
-end
-go
-
-CREATE VIEW CEBOLLITA_SUB_CAMPEON.VueltaMasRapidaPorCiruitoPorAño AS
-SELECT (select min(TIEMPO_VUELTA) 
-		FROM(select 
-			(CEBOLLITA_SUB_CAMPEON.tiempovuelta(num_vuelta,dim_circuito,dim_auto_nro,dim_auto_modelo,dim_anio)) AS TIEMPO_VUELTA
-			from CEBOLLITA_SUB_CAMPEON.BI_Medicion m1
-WHERE m1.dim_circuito=m3.dim_circuito AND m1.dim_escuderia=m3.dim_escuderia and m1.dim_anio=m3.dim_anio
-and CEBOLLITA_SUB_CAMPEON.tiempovuelta(num_vuelta,dim_circuito,dim_auto_nro,dim_auto_modelo,dim_anio)>0
-GROUP BY num_vuelta,dim_circuito,dim_auto_nro,dim_auto_modelo,dim_anio)AS TIEMPOS
-) as tiempo_mas_rapido,
-						dim_escuderia,
-						dim_circuito,
-						dim_anio 
-						FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion m3
-group by dim_escuderia,dim_circuito,dim_anio
-go
-
-
 
 CREATE VIEW CEBOLLITA_SUB_CAMPEON.MejorVueltaPorCiruitoPorAño AS
-SELECT (select min(TIEMPO_VUELTA) 
-		FROM(select 
-			((SELECT max(tiempo_vuelta)
-		FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion
-		WHERE dim_anio = m1.dim_anio AND num_vuelta = m1.num_vuelta AND dim_circuito = m1.dim_circuito AND dim_auto_nro = m1.dim_auto_nro and dim_auto_modelo=m1.dim_auto_modelo)) AS TIEMPO_VUELTA
-			from CEBOLLITA_SUB_CAMPEON.BI_Medicion m1
-WHERE m1.dim_circuito=m3.dim_circuito AND m1.dim_escuderia=m3.dim_escuderia and m1.dim_anio=m3.dim_anio
-and (SELECT max(tiempo_vuelta)
-		FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion
-		WHERE dim_anio = m1.dim_anio AND num_vuelta = m1.num_vuelta AND dim_circuito = m1.dim_circuito AND dim_auto_nro = m1.dim_auto_nro and dim_auto_modelo=m1.dim_auto_modelo)>0
-GROUP BY num_vuelta,dim_circuito,dim_auto_nro,dim_auto_modelo,dim_anio)AS TIEMPOS
-) as tiempo_mas_rapido,
-						dim_escuderia,
-						dim_circuito,
-						dim_anio 
-						FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion m3
+SELECT 
+min(m.tiempo_vuelta) mejor_vuelta,
+m.dim_anio año,
+m.dim_circuito circuito
+FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion m
 group by dim_escuderia,dim_circuito,dim_anio
 
 go
@@ -664,3 +609,4 @@ go
 
 commit
 go
+
