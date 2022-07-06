@@ -195,7 +195,7 @@ go
 create table [CEBOLLITA_SUB_CAMPEON].[Medicion_Freno](
 id_medicion decimal(18,0) foreign key references [CEBOLLITA_SUB_CAMPEON].[Medicion](codigo_medicion),
 id_freno nvarchar(255) foreign key references [CEBOLLITA_SUB_CAMPEON].[Freno](freno_serie),
-freno_grosor_pastilla decimal(18,0),
+freno_grosor_pastilla decimal(18,2),
 freno_temperatura decimal(18,2)
 constraint [PKMEDFreno] Primary Key(id_medicion,id_freno)
 )on [Primary]
