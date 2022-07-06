@@ -343,7 +343,20 @@ end
 go
 
 
-select*from CEBOLLITA_SUB_CAMPEON.Medicion_Freno
+CREATE FUNCTION CEBOLLITA_SUB_CAMPEON.Tipo_neumatico(@vuelta int, @carrera int, @automodelo nvarchar(255), @autonumero int, @sector int)
+returns int
+as
+begin
+	select tn.detalle from CEBOLLITA_SUB_CAMPEON.Medicion m
+	join CEBOLLITA_SUB_CAMPEON.Medicion_Neumatico mn on
+		mn.id_medicion = m.codigo_medicion
+	join CEBOLLITA_SUB_CAMPEON.Neumatico n on
+		n.neumatico_serie = mn.id_neumatico
+	join CEBOLLITA_SUB_CAMPEON.BI_Tipo_Neumatico tn on
+		n.neumatico_tipo = tn.id_tipo_neumatico
+	where m.auto_modelo = @automodelo and m.auto_numero = @autonumero and m.id_carrera = @carrera and m.codigo_sector = @sector and m.med_nro_vuelta = @vuelta
+	group by tn.detalle
+end
 
 create procedure CEBOLLITA_SUB_CAMPEON.Cargar_mediciones_BI
 as
@@ -388,7 +401,7 @@ CEBOLLITA_SUB_CAMPEON.desgaste_Motor(m.med_nro_vuelta,m.id_carrera,m.auto_modelo
 CEBOLLITA_SUB_CAMPEON.desgaste_Caja_Por_Vuelta(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 CEBOLLITA_SUB_CAMPEON.desgaste_frenos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 CEBOLLITA_SUB_CAMPEON.desgaste_neumaticos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
-
+CEBOLLITA_SUB_CAMPEON.obtener_Tipo_neumatico(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero,m.codigo_sector)
 from CEBOLLITA_SUB_CAMPEON.Medicion m
 	join CEBOLLITA_SUB_CAMPEON.Carrera c on c.id_carrera=m.id_carrera
 	join CEBOLLITA_SUB_CAMPEON.Sector s on s.codigo_sector=m.codigo_sector
