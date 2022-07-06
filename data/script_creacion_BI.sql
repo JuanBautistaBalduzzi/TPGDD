@@ -215,6 +215,7 @@ CREATE TABLE CEBOLLITA_SUB_CAMPEON.BI_Medicion (
 	dim_circuito int FOREIGN KEY REFERENCES CEBOLLITA_SUB_CAMPEON.BI_Circuito,
 	dim_anio int,
 	dim_cuatri int,
+	dim_tipo_neumatico int FOREIGN KEY REFERENCES CEBOLLITA_SUB_CAMPEON.BI_Tipo_Neumatico,
 	dim_piloto_nombre nvarchar(255),
 	dim_piloto_apellido nvarchar(255),
 	velocidad decimal(18,2),
@@ -365,7 +366,8 @@ insert into CEBOLLITA_SUB_CAMPEON.BI_Medicion(
 	Potencia_motor,
 	Desgaste_caja,
 	desgaste_frenos,
-	desgaste_neumaticos
+	desgaste_neumaticos,
+	dim_tipo_neumatico
 )
 select 
 CEBOLLITA_SUB_CAMPEON.GASTO_COMBUSTIBLE_POR_VUELTA(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
@@ -385,7 +387,8 @@ a.auto_piloto_apellido,
 CEBOLLITA_SUB_CAMPEON.desgaste_Motor(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 CEBOLLITA_SUB_CAMPEON.desgaste_Caja_Por_Vuelta(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
 CEBOLLITA_SUB_CAMPEON.desgaste_frenos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
-CEBOLLITA_SUB_CAMPEON.desgaste_neumaticos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero)
+CEBOLLITA_SUB_CAMPEON.desgaste_neumaticos(m.med_nro_vuelta,m.id_carrera,m.auto_modelo,m.auto_numero),
+
 from CEBOLLITA_SUB_CAMPEON.Medicion m
 	join CEBOLLITA_SUB_CAMPEON.Carrera c on c.id_carrera=m.id_carrera
 	join CEBOLLITA_SUB_CAMPEON.Sector s on s.codigo_sector=m.codigo_sector
