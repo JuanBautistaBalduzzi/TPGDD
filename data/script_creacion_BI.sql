@@ -591,12 +591,12 @@ select
 		sum(m.Desgaste_caja) desgaste_caja,---ver estoooooooo
 		sum(desgaste_frenos) desgaste_freno,
 		sum(desgaste_neumaticos) desgaste_neumaticos,
-		m.num_vuelta,
+		m.dim_vuelta,
 		m.dim_circuito,
 		m.dim_auto_nro,
 		m.dim_auto_modelo 
 		from CEBOLLITA_SUB_CAMPEON.BI_Medicion m
-	group by m.num_vuelta,m.dim_circuito,m.dim_auto_nro,m.dim_auto_modelo
+	group by m.dim_vuelta,m.dim_circuito,m.dim_auto_nro,m.dim_auto_modelo
 	go
 
 
@@ -607,7 +607,7 @@ returns decimal(18,10)
 as
 begin
 	return(
-	select 
+	select top 1
 	sum(tiempo_vuelta)
 	from CEBOLLITA_SUB_CAMPEON.BI_Medicion m 
 	where m.dim_anio=@año and m.dim_circuito=@circuito and m.dim_escuderia=@escuderia
