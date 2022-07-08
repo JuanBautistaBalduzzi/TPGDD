@@ -617,7 +617,7 @@ begin
 	)
 end
 go
-select*from CEBOLLITA_SUB_CAMPEON.BI_Medicion
+
 
 CREATE VIEW CEBOLLITA_SUB_CAMPEON.MejorVueltaPorCiruitoPorAño AS
 SELECT 
@@ -629,8 +629,6 @@ FROM CEBOLLITA_SUB_CAMPEON.BI_Medicion m
 group by dim_escuderia,dim_circuito,dim_anio
 go
 
-
-select TELE_AUTO_NUMERO_VUELTA,AUTO_MODELO,AUTO_NUMERO, TELE_AUTO_TIEMPO_VUELTA,CIRCUITO_CODIGO from gd_esquema.Maestra where TELE_AUTO_TIEMPO_VUELTA=0
 --VIEW 3
 
 create VIEW CEBOLLITA_SUB_CAMPEON.CircuitosDeMayorConsumoPromedio AS
